@@ -1,1 +1,85 @@
-\# PetCat 2D帧动画渲染引擎优化总结与进阶方案 ## 一、现有引擎核心现状 ### 1.1 基础信息 - 目标平台：RK3288（Mali-T760） - 核心渲染路径：`SurfaceView + Canvas` 软件渲染，WEBP Atlas 资源经 `BitmapFactory.decodeStream`（CPU 软解）后完成绘制 - 核心目标：稳定支持 720P 24fps 2×1/2×2 帧动画播放（当前仅 720P 1×1 方案达标） - 核心定位：轻量级 2D 帧动画 runtime（非完整游戏引擎），聚焦“稳定播放、低内存、低 GC、易接入” ### 1.2 核心性能瓶颈 | 瓶颈类型 | 具体表现 | 核心原因 | |----------|----------|----------| | 解码瓶颈（首要） | 720P 2×2 解码 P50 达 101ms，远超 24fps 下 42ms 帧预算；单线程预加载易触发渲染线程同步解码 | WEBP 纯 CPU 软解，RK3288 算力有限；预加载调度不足 | | 渲染瓶颈 | Canvas 绘制需每次 CPU→GPU 上传 Bitmap，渲染 P50 达 25ms，占满 60Hz 设备 16.67ms 帧预算 | 软件渲染未利用 GPU 并行计算能力，无纹理缓存机制 | | 内存/GC 瓶颈 | Bitmap 频繁创建销毁引发 GC 停顿，渲染 costMax 达 60~90ms | 无 Bitmap 复用机制，内存碎片化严重 | | 调度瓶颈 | 帧节奏抖动、预加载线程易被系统压制 | Thread.sleep 驱动渲染循环（未对齐 VSync）；预加载线程优先级低 | ### 1.3 现有优化路线（分阶段） | 阶段 | 周期 | 核心优化方向 | 预期收益 | |------|------|--------------|----------| | 短期 | 1~2 周 | 多线程并行预加载、inBitmap 复用、预加载线程优先级提升 | 720P 2×1 零晚帧；720P 2×2 晚帧从 65% 降至 10~20%；GC 卡顿收敛 | | 中期 | 1~2 月 | OpenGL ES 替换 Canvas、异步解码+双缓冲、VSync 对齐渲染 | 渲染 P50 从 25ms 降至 3~5ms；消除同步解码，晚帧 <5% | | 长期 | 3~6 月 | MediaCodec 硬解（H.264/H.265 替换 WEBP） | 解码 P50 从 25ms 降至 2~5ms，支持 1080P+ 分辨率 | ### 1.4 现有验收基线（RK3288，720P 1×1） | 指标 | 健康值 | 警戒值 | |------|--------|--------| | 解码 P50 | < 25ms | > 33ms | | 渲染 costP50 | < 28ms | > 42ms | | 晚帧占比 | < 5% | > 15% | | 同步解码次数 | 0~1/统计窗口 | > 3/统计窗口 | ## 二、核心进阶优化观点 ### 2.1 核心痛点：WEBP 格式制约解码速率 现有 WEBP 软解是性能天花板，核心问题如下： 1. **算力依赖**：完全依赖 CPU 解码，RK3288 的 Cortex-A17 无法支撑高分辨率/高排列密度的解码需求（720P 2×2 解码耗时超帧预算 2 倍）； 2. **链路冗余**：WEBP 解码后需先存入 CPU 内存，再上传至 GPU，多一次数据拷贝； 3. **调度风险**：单线程预加载易出现缓存未命中，触发渲染线程同步解码，直接引发帧卡顿。 ### 2.2 进阶方向 1：全链路 OpenGL ES + Shader 释放 GPU 性能 #### 核心价值 彻底替换 `SurfaceView + Canvas` 软件渲染路径，最大化利用 GPU 并行计算能力： 1. **渲染链路重构**：   - 解码后的 Bitmap 仅一次上传为 GPU 纹理（`glTexImage2D`），后续帧仅需 `glDrawArrays` 绘制，渲染耗时降至 3~5ms；   - 采用 `TextureView` 替代 `SurfaceView`，降低渲染同步开销，提升帧稳定性； 2. **扩展能力提升**：基于 Shader 支持淡入淡出、色彩校正、模糊、发光等特效，同时适配“背景+角色+阴影”多层合成需求； 3. **兼容策略**：保留 Canvas 渲染作为降级方案，应对低端设备 OpenGL ES 驱动兼容问题。 #### 实施关键 - 构建 GPU 纹理缓存池，统一管理纹理生命周期，避免内存泄漏； - 渲染线程与资源线程解耦：渲染线程仅读取已就绪纹理，资源线程负责纹理上传。 ### 2.3 进阶方向 2：Basis Universal 超级纹理压缩替代 WEBP #### 核心价值 从根源解决解码耗时问题，实现“零 CPU 解码、GPU 直接加载”： | 特性 | WEBP（软解） | Basis Universal | |------|--------------|-----------------| | 解码依赖 | 纯 CPU 软解（耗时 20~100ms） | 近零解码（仅格式解包，GPU 原生支持） | | 数据路径 | CPU 内存 → GPU 内存（二次拷贝） | 直接加载至 GPU 显存（无冗余拷贝） | | 压缩率 | 中等 | 更高（降低资源体积和 IO 耗时） | | 兼容性 | 全平台支持 | 兼容 OpenGL ES/Vulkan，支持分级加载 | #### 实施建议 1. **资源生产侧**：改造资产构建流程，将 WEBP Atlas 转换为 Basis Universal 格式（.basis），构建阶段完成压缩； 2. **引擎侧**：   - 集成 Basis Universal 轻量级解包库，替换现有 WEBP 解码逻辑；   - 结合 OpenGL ES 渲染链路，形成“Basis 纹理 → GPU 纹理 → Shader 绘制”全 GPU 链路； 3. **降级策略**：低版本 GPU 不支持时，回退至 WEBP 软解 + Canvas 渲染。 ## 三、整合优化路线图（含进阶方案） | 阶段 | 核心优化动作 | 关键指标目标（RK3288） | 复杂度 | 核心收益 | |------|--------------|------------------------|--------|----------| | 短期（必做） | 1. 预加载线程池改为 2~3 线程<br>2. 实现按尺寸分组的 Bitmap 池（inBitmap 复用）<br>3. 预加载线程优先级提升至 NORM_PRIORITY | 720P 2×1：解码 P50=42ms，渲染 P50=25ms，晚帧 <1%<br>720P 2×2：晚帧降至 10~20% | 中等 | 快速解决同步解码和 GC 卡顿问题 | | 中期（核心进阶） | 1. OpenGL ES + Shader 替换 Canvas 渲染<br>2. VSync 对齐渲染循环（Choreographer）<br>3. 异步解码 + 三缓冲页面池 | 720P 2×2：渲染 P50=5ms，晚帧 <5%<br>消除同步解码卡顿 | 高 | 释放 GPU 性能，突破渲染耗时瓶颈 | | 长期（终极优化） | 1. Basis Universal 纹理压缩替代 WEBP<br>2. 可选：MediaCodec 硬解（H.264/H.265）兜底 | 1080P 2×2：解码/渲染 P50 均 <8ms，晚帧 <1%<br>支持更高分辨率/帧率 | 极高 | 从根源解决解码瓶颈，支撑高阶场景 | ## 四、关键风险与约束 1. **兼容性风险**：OpenGL ES/Shader/Basis Universal 在 RK3288（Mali-T760）需充分测试，必须保留降级路径； 2. **内存风险**：GPU 纹理 + Bitmap 池会增加内存占用，需实现 OOM 监控、LRU 淘汰、内存水位动态控制； 3. **工具链风险**：Basis Universal 格式转换需改造资产构建流程，需评估工具链迁移成本； 4. **复杂度约束**：避免引入完整游戏引擎特性（场景树/ECS/物理等），保持轻量级 runtime 核心定位。 ## 五、核心结论 1. 短期优先落地“多线程预加载 + Bitmap 复用”，快速解决当前卡顿问题； 2. 中期核心推进 OpenGL ES + Shader 重构，释放 GPU 渲染性能是突破帧预算的关键； 3. 长期采用 Basis Universal 超级纹理压缩替代 WEBP，从根源解决解码速率受限问题，是支撑高分辨率/高帧率场景的终极方案； 4. 全程保持“轻量级 runtime”定位，不盲目引入重引擎特性，聚焦帧动画播放核心诉求。
+# PetCat 2D 帧动画渲染引擎优化总结与进阶方案
+
+> 该文档聚焦从 2D 帧动画播放瓶颈到业务可集成的 GPU-Native Runtime SDK 的设计路线。当前项目从 0 构建，首版直接使用 OpenGL ES，不再规划 Canvas backend。
+
+## 1. 当前问题归纳
+
+轻量级 2D/多层帧动画引擎的主要瓶颈通常不在单一 draw call，而在以下链路叠加：
+
+- 播放时 PNG/WEBP/Bitmap 解码占用 CPU。
+- Bitmap 到 GPU 纹理的重复上传造成主线程或渲染线程阻塞。
+- Canvas 路径缺少可控的 shader pass、FBO、多层合成与 GPU 资源生命周期管理。
+- 多层背景、角色、阴影、特效分离绘制时，边缘融合与同步控制容易失真。
+- Timeline 与 Audio 时钟未统一时，动画与声音会逐渐 drift。
+
+## 2. 优化目标
+
+| 阶段 | 目标 | 核心指标 |
+| --- | --- | --- |
+| 短期 | 消除同步解码与 GC 卡顿 | 720P 晚帧明显下降 |
+| 中期 | OpenGL ES 全链路渲染 | 720P 渲染 P50 约 5ms |
+| 长期 | KTX2/BasisU GPU 纹理流 | 1080P/4K 稳定、多层实时合成 |
+
+## 3. 推荐技术路线
+
+### 3.1 产品形态
+
+对外交付物应是 Android SDK，业务通过 `PetCatPlayerView`、`PetCatPlayer`、`PetCatClip`、`PetCatConfig` 和 callback 集成；Runtime/Engine 是 SDK 内部实现，不应要求业务直接管理 GL、JNI 或 C++ 对象。
+
+### 3.2 渲染后端
+
+第一版直接使用 OpenGL ES 3.0，理由是 Android 设备覆盖率高、接入复杂度低、足以支撑 2D atlas、多层 blend、FBO 与基础 shader FX。
+
+后续可在架构层预留 RenderBackend 接口，但不建议首版同时实现 Vulkan，也不建议先做 Canvas MVP 再替换，以免拉长验证周期。
+
+### 3.3 资源格式
+
+长期格式应以 KTX2 + BasisU 为核心：
+
+- 离线阶段完成帧提取、atlas packing、纹理压缩、timeline/material 生成。
+- Runtime 阶段只做轻量 metadata parse、按需 transcode/upload、cache 管理。
+- 播放中禁止重型图片解码与逐帧 `glTexImage2D`。
+
+### 3.4 多层合成
+
+建议 layer 顺序固定为：
+
+```text
+Background → Back FX → Character Shadow → Character → Front FX → Overlay/UI
+```
+
+每层需要包含：
+
+- texture handle
+- transform
+- opacity
+- blend mode
+- material/shader reference
+- visibility time range
+
+### 3.5 Timeline 与 Audio
+
+Audio 应作为 master clock。Timeline 每帧根据 audio time 计算当前 frame、layer visibility、transition 与 shader uniforms。无音频 clip 可使用 monotonic clock fallback，但接口仍保持同一套 master clock 抽象。
+
+## 4. 分阶段落地建议
+
+1. **先做 SDK 工程骨架**：Android SDK module + sample-app + NDK + JNI + 空 GL context。
+2. **再做最小绘制**：全屏 quad + 单纹理 + render loop + FrameStats。
+3. **再做 layer/timeline**：不要过早引入复杂 shader。
+4. **再做 TextureCache**：明确所有权、LRU、水位与异步上传。
+5. **再接 KTX2/BasisU**：资源 schema 稳定后再做。
+6. **最后做高级 FX 与 4K**：以 benchmark 数据决定优化优先级。
+
+## 5. 设计红线
+
+- GL thread 不做磁盘 IO、重型 JSON parse、阻塞等待。
+- Runtime 播放路径不做 PNG/WEBP 重型解码。
+- 不允许每帧重新创建 shader、framebuffer 或大纹理。
+- 不把 UI 生命周期逻辑写入 C++ 渲染核心。
+- 不要求业务直接调用 NativeBridge 或管理 GL 资源。
+- 不引入完整 ECS/物理系统，保持 runtime 聚焦播放与合成。
+- Canvas 不作为计划内渲染 backend；设备不支持时通过质量档位、禁用 FX、减少层数或明确错误码处理。
+
+## 6. 与 Spec Coding 的关系
+
+本文提供优化方向；真正实现时应拆到 `docs/SPEC_CODING_PLAN.md` 中定义的波次，并为每个任务创建独立 spec。首批任务应优先固定工程版本、Native API、资源 schema 与诊断指标。

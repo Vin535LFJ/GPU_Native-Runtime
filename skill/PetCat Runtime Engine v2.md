@@ -8,8 +8,9 @@
 > Rendering Backend: OpenGL ES 3.0 + GLSL
 > Language: Kotlin(Java wrapper) + C++17(NDK core)
 > Resource Pipeline: KTX2 + Basis Universal
-> Runtime Type: Lightweight Realtime GPU AV Runtime
-> Positioning: Animation/AV Composition Runtime (NOT Full Game Engine)
+> Product Form: Business-facing Android SDK
+> Internal Runtime Type: Lightweight Realtime GPU AV Runtime
+> Positioning: SDK with an internal Animation/AV Composition Runtime (NOT Full Game Engine)
 
 ------
 
@@ -17,7 +18,7 @@
 
 # 1.1 What This Engine Actually Is
 
-PetCat Runtime v2 is:
+PetCat should be delivered as a business-facing Android SDK. Internally, PetCat Runtime v2 is:
 
 ```text
 Realtime GPU AV Composition Runtime
@@ -39,17 +40,13 @@ Full game engine
 
 # 1.2 Core Technical Direction
 
-The runtime evolves from:
-
-```text
-CPU Bitmap Playback
-```
-
-to:
+Because this repository starts from zero, the runtime should directly target:
 
 ```text
 GPU Texture Streaming + Shader Composition
 ```
+
+Historical CPU Bitmap/Canvas playback is only a bottleneck reference, not a planned MVP implementation path.
 
 ------
 
