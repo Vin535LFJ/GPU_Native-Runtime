@@ -149,7 +149,19 @@ app/
 
 ---
 
-## 6. 实现计划 (Spec Coding 指导)
+
+## 6. Spec Coding 规划入口
+
+本项目后续实现建议采用 **Spec Coding**：先固定接口、资源 schema、线程模型和验收指标，再按小步任务逐个实现。详细实施波次、首批 Spec 文件建议、任务模板见：
+
+- `docs/SPEC_CODING_PLAN.md`：从设计文档到可执行 Spec 的总规划。
+- `docs/SPEC_TEMPLATE.md`：每个 Spec 任务必须包含的字段模板。
+- `AI Coding 任务清单.md`：模块级任务清单与优先级。
+
+当前建议的首个编码任务不是 BasisU 或复杂 Shader，而是 **Android/NDK 最小工程骨架 + NativeBridge init/release + 空 GL context**，用于尽早验证 Gradle、NDK、CMake、JNI 与设备 GL 环境。
+
+---
+## 7. 实现计划 (Spec Coding 指导)
 
 | 阶段 | 核心动作                                  | 负责人       | 时间周期  |
 | -- | ------------------------------------- | --------- | ----- |
@@ -166,7 +178,7 @@ app/
 
 ---
 
-## 7. 核心风险与降级策略
+## 8. 核心风险与降级策略
 
 1. **GPU 兼容性**：RK3288 Mali-T760 对 OpenGL ES 3.0/Shader 支持需测试；低端设备降级 Canvas + Bitmap。
 2. **内存压力**：GPU 纹理 + Bitmap 池，需 LRU 回收 + 水位控制。
@@ -175,7 +187,7 @@ app/
 
 ---
 
-## 8. 总结
+## 9. 总结
 
 * 短期先解决同步解码与 GC 卡顿问题。
 * 中期全面迁移到 GPU 原生 + Shader + BasisU。

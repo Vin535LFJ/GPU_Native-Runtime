@@ -96,3 +96,49 @@ public:
 5. 所有渲染/纹理操作需支持 GPU 异步、LRU、三缓冲。
 6. 每阶段完成后输出指标日志（解码 P50、渲染 P50、晚帧占比）供验收。
 
+
+
+---
+
+## 8️⃣ Spec Coding 波次规划
+
+> 本节把 T1~T26 任务转换为更适合 AI Coding 的交付波次。每个波次都应先写 Spec，再实现接口、测试与代码。详细模板见 `docs/SPEC_TEMPLATE.md`。
+
+| 波次 | 目标 | 覆盖任务 | 交付物 | 通过标准 |
+| ---- | ---- | -------- | ------ | -------- |
+| Wave 0 | 设计冻结与契约 | T1~T4/T16/T24 的接口前置 | Native API、资源 schema、状态机、错误码 | 后续实现无需频繁改公共接口 |
+| Wave 1 | 最小工程骨架 | T3/T5 | Android app、GLSurfaceView、CMake、JNI init/release | App 可启动，GL context 创建成功 |
+| Wave 2 | MVP 渲染闭环 | T5/T7/T9 | ShaderProgram、单纹理 draw、VSync render loop | 单层纹理可稳定显示，渲染指标可记录 |
+| Wave 3 | Timeline + Layer | T8/T16/T17/T20/T21 | Timeline data model、layer z-order、blend mode | 时间戳可映射帧，多层顺序正确 |
+| Wave 4 | Resource + Cache | T1/T2/T4/T7 | TextureHandle、异步上传、LRU、水位 | 不在每帧触发 `glTexImage2D`，可回收纹理 |
+| Wave 5 | Audio 主时钟 | T18/T19 | AudioPlayer、AudioSync、播放状态机 | Timeline 由音频时间驱动，无明显 drift |
+| Wave 6 | KTX2/BasisU + Builder | T24/T25 | KTX2 loader、Basis transcoder、petcat-builder MVP | 示例 clip 可完整构建并加载 |
+| Wave 7 | Shader FX | T10~T15/T22 | Feather、Alpha Blur、Shadow、Color/LUT/Bloom | FX 可通过 material 开关并输出正确画面 |
+| Wave 8 | 性能与降级 | T23/T26 | Benchmark、设备能力探测、fallback 策略 | 输出 P50/P95/late frame/cache/memory 报告 |
+
+## 9️⃣ 单任务 Spec 模板要求
+
+每个任务进入实现前，必须包含：
+
+```text
+Spec ID:
+目标:
+范围内:
+范围外:
+输入/输出:
+涉及文件:
+接口契约:
+实现步骤:
+验收标准:
+测试命令:
+风险与降级:
+```
+
+## 🔟 首批建议拆分任务
+
+1. `S0.1-engine-decisions`：锁定 Android/Gradle/NDK/CMake/Kotlin 版本与包名。
+2. `S0.2-native-api-contract`：定义 `init/resize/loadClip/play/pause/seek/drawFrame/release/getFrameStats`。
+3. `S0.3-asset-schema`：定义 `clip.json`、`timeline.anim`、`material.json` 的字段和版本。
+4. `S1.1-android-app-skeleton`：建立 Android 最小工程、Activity、SurfaceView。
+5. `S1.2-native-runtime-skeleton`：建立 C++ RuntimeCore、JNI bridge、CMake。
+6. `S1.3-diagnostics-skeleton`：建立 FrameStats 与统一日志。
