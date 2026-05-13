@@ -1,8 +1,11 @@
+
 # PetCat GPU-Native Runtime SDK — Spec Coding 实施规划
+
 
 > 本文档用于把现有设计文档转换为可执行、可验收、可逐步交付的 Spec Coding 计划。当前阶段只做架构与任务规划，不实现运行时代码。
 
 ## 1. 规划结论
+
 
 PetCat 的对外交付物应是 **业务 App 可直接集成的 Android SDK**；Runtime/Engine 是 SDK 内部实现分层。后续所有 Spec 必须同时考虑：
 
@@ -37,9 +40,11 @@ PetCat 的对外交付物应是 **业务 App 可直接集成的 Android SDK**；
 
 ### 2.2 Android 工程边界
 
+
 现有文档明确了模块，但还需要在正式编码前固定：
 
 - Android 包名、minSdk、targetSdk、Kotlin/AGP/NDK/CMake 版本。
+
 - SDK module 与 sample-app 的 Gradle 结构。
 - 是否使用 `GLSurfaceView` 作为第一版渲染宿主；建议 MVP 使用 `GLSurfaceView`，后续再抽象自定义 EGL。
 - Kotlin 层是否只负责生命周期、调度与 JNI，避免业务逻辑下沉到 UI 层。
@@ -66,6 +71,7 @@ OpenGL ES 3.0 + GLSL shader pipeline
 
 ### 2.5 Native API 契约
 
+
 需要先定义稳定的 JNI/Native API，再让各模块独立实现。建议把 API 分为：
 
 - Runtime lifecycle：`init`、`resize`、`release`。
@@ -74,7 +80,9 @@ OpenGL ES 3.0 + GLSL shader pipeline
 - Render tick：`drawFrame`、`onVsync`。
 - Diagnostics：`getFrameStats`、`setLogLevel`。
 
+
 ### 2.6 资源格式 Schema
+
 
 当前文档提到了 `.anim`、`.material`、`.json`，但需要补齐字段级 schema：
 
@@ -84,17 +92,20 @@ OpenGL ES 3.0 + GLSL shader pipeline
 
 建议所有资源文件都带 `schemaVersion`，为未来兼容升级留出口。
 
+
 ### 2.7 线程模型与所有权
 
 需要明确：
 
 - **UI thread**：业务生命周期、View attach/detach、触摸/业务事件。
 - **Scheduler**：`Choreographer.postFrameCallback()` 注册与分发。
+
 - **GL thread**：GL context、shader compile、texture upload、draw、FBO。
 - **IO/worker threads**：磁盘 IO、KTX2 stream、Basis transcode、metadata parse。
 - **Audio thread/system callback**：音频播放时间采样。
 
 禁止 GL thread 做磁盘 IO、阻塞等待、重型 JSON 解析；禁止 worker thread 直接调用依赖当前 GL context 的 API。
+
 
 ### 2.8 MVP 资源策略
 
@@ -110,6 +121,7 @@ OpenGL ES 3.0 + GLSL shader pipeline
 现有指标方向正确，但需要统一统计口径：
 
 - `transcode_ms`：资源转码耗时。
+
 - `upload_ms`：GPU 上传耗时。
 - `render_cpu_ms`：提交绘制命令耗时。
 - `gpu_frame_ms`：GPU 完成耗时，如设备支持 timer query。
@@ -144,13 +156,16 @@ Spec ID:
 
 ## 4. 推荐交付波次
 
+
 ### Wave 0 — SDK/API/Schema 契约冻结
+
 
 | Spec | 目标 | 主要产出 | 验收 |
 | --- | --- | --- | --- |
 | S0.1 | 工程技术栈锁定 | Gradle/NDK/CMake/包名决策记录 | 文档明确版本与目录 |
 | S0.2 | Native API 契约 | JNI API 表、错误码、生命周期状态机 | Kotlin/C++ 接口无歧义 |
 | S0.3 | 资源 Schema | clip/timeline/material schema | 示例资源可被 schema 校验 |
+
 | S0.4 | SDK 产品契约 | SDK facade、View、Player、Callback、ErrorCode | 业务调用方式无歧义 |
 
 ### Wave 1 — 最小 SDK 工程骨架
@@ -210,13 +225,17 @@ Spec ID:
 | S7.2 | Shadow | 阴影 pass 与参数 | 阴影跟随角色位置变化 |
 | S7.3 | Color/LUT/Bloom/RimLight | 高级 FX pass | 可按 material 开关 |
 
+
 ### Wave 8 — 性能矩阵与设备降级
+
 
 | Spec | 目标 | 主要产出 | 验收 |
 | --- | --- | --- | --- |
 | S8.1 | Benchmark harness | 自动播放、统计 P50/P95/Max | 输出可比较报告 |
 | S8.2 | Device capability | GL extension、texture format 探测 | 自动选择最佳格式 |
+
 | S8.3 | Quality fallback strategy | 低分辨率、减少层数、禁用高阶 FX、明确错误码 | 低端设备可预测降级或失败 |
+
 
 ## 5. 首批建议创建的 Spec 文件
 
@@ -226,11 +245,13 @@ Spec ID:
 docs/specs/S0.1-engine-decisions.md
 docs/specs/S0.2-native-api-contract.md
 docs/specs/S0.3-asset-schema.md
+
 docs/specs/S0.4-sdk-product-contract.md
 docs/specs/S1.1-android-sdk-skeleton.md
 docs/specs/S1.2-native-runtime-skeleton.md
 docs/specs/S1.3-diagnostics-skeleton.md
 docs/specs/S1.4-empty-gl-context.md
+
 ```
 
 ## 6. 首个编码任务建议

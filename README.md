@@ -188,9 +188,11 @@ docs/
 
 ---
 
+
 ## 7. Spec Coding 规划入口
 
 本项目后续实现采用 **Spec Coding**：先固定业务 SDK API、Native API、资源 schema、线程模型和验收指标，再按小步任务逐个实现。详细实施波次、首批 Spec 文件建议、任务模板见：
+
 
 - `docs/SPEC_CODING_PLAN.md`：从设计文档到可执行 Spec 的总规划。
 - `docs/SPEC_TEMPLATE.md`：每个 Spec 任务必须包含的字段模板。
@@ -200,6 +202,7 @@ docs/
 当前建议的首个编码任务是 **Android SDK module + sample-app + NativeBridge init/release + 空 OpenGL ES context**，用于尽早验证 SDK 集成方式、Gradle、NDK、CMake、JNI 与设备 GL 环境。
 
 ---
+
 
 ## 8. 实现计划（与 Spec Coding 对齐）
 
@@ -215,11 +218,14 @@ docs/
 | S7 | Feather/Alpha Blur/Shadow 与高级 FX | AI Coding | 2~3 周 |
 | S8 | 1080P/4K 性能矩阵、设备能力探测与降级策略 | AI Coding | 2~3 周 |
 
+
 > 每阶段完成后进行验收测试，指标包括 render P50/P95、upload/transcode P50/P95、late frame ratio、cache hit ratio、内存水位。
 
 ---
 
+
 ## 9. 核心风险与降级策略
+
 
 1. **GPU 兼容性**：首版目标是 OpenGL ES 3.0；需要检测 GL version、extension、最大纹理尺寸与压缩纹理格式。
 2. **内存压力**：GPU 纹理 + native 资源需 LRU 回收、引用计数和水位控制。
