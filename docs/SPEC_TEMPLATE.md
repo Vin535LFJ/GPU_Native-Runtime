@@ -29,7 +29,9 @@
 
 ## 接口契约
 
-列出 Kotlin、JNI、C++ 或资源 schema 的稳定接口。
+
+列出业务 SDK API、Kotlin runtime API、JNI、C++ 或资源 schema 的稳定接口。若任务涉及业务集成，必须优先描述 SDK facade，而不是直接暴露 NativeBridge。
+
 
 ## 涉及文件
 
@@ -59,3 +61,6 @@
 ## 风险与降级
 
 - 待补充。
+
+- 如涉及设备兼容，优先描述质量档位、禁用 FX、资源格式选择或明确错误码；Canvas 不作为计划内 backend。
+

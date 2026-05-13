@@ -1,6 +1,8 @@
 # PetCat 2D 帧动画渲染引擎优化总结与进阶方案
 
-> 该文档用于补齐规划资料中的空白文档，聚焦从现有 2D 帧动画播放瓶颈到 GPU-Native Runtime 的迁移路线。
+
+> 该文档聚焦从 2D 帧动画播放瓶颈到业务可集成的 GPU-Native Runtime SDK 的设计路线。当前项目从 0 构建，首版直接使用 OpenGL ES，不再规划 Canvas backend。
+
 
 ## 1. 当前问题归纳
 
@@ -22,13 +24,19 @@
 
 ## 3. 推荐技术路线
 
-### 3.1 渲染后端
 
-第一版使用 OpenGL ES 3.0，理由是 Android 设备覆盖率高、接入复杂度低、足以支撑 2D atlas、多层 blend、FBO 与基础 shader FX。
+### 3.1 产品形态
 
-后续可在架构层预留 RenderBackend 接口，但不建议首版同时实现 Vulkan，以免拉长验证周期。
+对外交付物应是 Android SDK，业务通过 `PetCatPlayerView`、`PetCatPlayer`、`PetCatClip`、`PetCatConfig` 和 callback 集成；Runtime/Engine 是 SDK 内部实现，不应要求业务直接管理 GL、JNI 或 C++ 对象。
 
-### 3.2 资源格式
+### 3.2 渲染后端
+
+第一版直接使用 OpenGL ES 3.0，理由是 Android 设备覆盖率高、接入复杂度低、足以支撑 2D atlas、多层 blend、FBO 与基础 shader FX。
+
+后续可在架构层预留 RenderBackend 接口，但不建议首版同时实现 Vulkan，也不建议先做 Canvas MVP 再替换，以免拉长验证周期。
+
+### 3.3 资源格式
+
 
 长期格式应以 KTX2 + BasisU 为核心：
 
@@ -36,7 +44,9 @@
 - Runtime 阶段只做轻量 metadata parse、按需 transcode/upload、cache 管理。
 - 播放中禁止重型图片解码与逐帧 `glTexImage2D`。
 
-### 3.3 多层合成
+
+### 3.4 多层合成
+
 
 建议 layer 顺序固定为：
 
@@ -53,13 +63,17 @@ Background → Back FX → Character Shadow → Character → Front FX → Overl
 - material/shader reference
 - visibility time range
 
-### 3.4 Timeline 与 Audio
+
+### 3.5 Timeline 与 Audio
+
 
 Audio 应作为 master clock。Timeline 每帧根据 audio time 计算当前 frame、layer visibility、transition 与 shader uniforms。无音频 clip 可使用 monotonic clock fallback，但接口仍保持同一套 master clock 抽象。
 
 ## 4. 分阶段落地建议
 
-1. **先做工程骨架**：Android + NDK + JNI + 空 GL context。
+
+1. **先做 SDK 工程骨架**：Android SDK module + sample-app + NDK + JNI + 空 GL context。
+
 2. **再做最小绘制**：全屏 quad + 单纹理 + render loop + FrameStats。
 3. **再做 layer/timeline**：不要过早引入复杂 shader。
 4. **再做 TextureCache**：明确所有权、LRU、水位与异步上传。
@@ -72,7 +86,11 @@ Audio 应作为 master clock。Timeline 每帧根据 audio time 计算当前 fra
 - Runtime 播放路径不做 PNG/WEBP 重型解码。
 - 不允许每帧重新创建 shader、framebuffer 或大纹理。
 - 不把 UI 生命周期逻辑写入 C++ 渲染核心。
+
+- 不要求业务直接调用 NativeBridge 或管理 GL 资源。
 - 不引入完整 ECS/物理系统，保持 runtime 聚焦播放与合成。
+- Canvas 不作为计划内渲染 backend；设备不支持时通过质量档位、禁用 FX、减少层数或明确错误码处理。
+
 
 ## 6. 与 Spec Coding 的关系
 
