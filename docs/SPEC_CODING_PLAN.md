@@ -24,6 +24,7 @@ PetCat 的对外交付物应是 **业务 App 可直接集成的 Android SDK**；
 7. **音频主时钟闭环**：AudioPlayer master clock 驱动 Timeline，处理 pause/seek/drift。
 8. **Shader FX 迭代**：Feather、Alpha Blur、Shadow 优先；Bloom/LUT/RimLight 后置。
 9. **性能与兼容性矩阵**：720P/1080P/4K、低端/中端设备、质量档位与明确错误码。
+10. **分页合图与显存预算闭环**：`pageFrames`、`maxResidentPages`、设备分档默认值与压测门槛。
 
 ## 2. 需要补齐或澄清的设计点
 
