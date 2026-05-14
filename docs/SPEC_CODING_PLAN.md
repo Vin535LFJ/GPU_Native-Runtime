@@ -24,6 +24,7 @@ PetCat 的对外交付物应是 **业务 App 可直接集成的 Android SDK**；
 7. **音频主时钟闭环**：AudioPlayer master clock 驱动 Timeline，处理 pause/seek/drift。
 8. **Shader FX 迭代**：Feather、Alpha Blur、Shadow 优先；Bloom/LUT/RimLight 后置。
 9. **性能与兼容性矩阵**：720P/1080P/4K、低端/中端设备、质量档位与明确错误码。
+10. **分页合图与显存预算闭环**：`pageFrames`、`maxResidentPages`、设备分档默认值与压测门槛。
 
 ## 2. 需要补齐或澄清的设计点
 
@@ -167,6 +168,9 @@ Spec ID:
 | S0.3 | 资源 Schema | clip/timeline/material schema | 示例资源可被 schema 校验 |
 
 | S0.4 | SDK 产品契约 | SDK facade、View、Player、Callback、ErrorCode | 业务调用方式无歧义 |
+| S0.5 | 能力分层与降级矩阵 | Tier-0/1/2、功能开关、降级路径、错误码 | 初始化可决策且可回退 |
+| S0.6 | 时钟与同步契约 | 采样/平滑/漂移纠偏/seek 重同步 | A/V drift 可观测且可收敛 |
+| S0.7 | 资源预算契约 | 显存预算、上传预算、水位与淘汰优先级 | 抖动风险可控且可验证 |
 
 ### Wave 1 — 最小 SDK 工程骨架
 

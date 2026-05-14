@@ -240,3 +240,55 @@ docs/
 * SDK 内部包含轻量级 GPU-Native Runtime Engine。
 * 首版从 0 开始直接实现 OpenGL ES 渲染闭环，不再规划 Canvas 替换路线。
 * 后续所有任务必须按 Spec Coding 固定业务 API、内部 API、资源 schema 和验收指标。
+
+
+## 11. 常见架构疑问（SDK / SO / JNI / Kotlin vs Java）
+
+### 11.1 这个架构是否和 Cocos C++ 引擎动态库模式类似？
+
+是的，**分层思想相似**：
+
+- C++ 引擎核心以 Native 形式提供（通常是 `.so`）。
+- Android 侧通过 JNI 暴露可调用接口。
+- 业务层最终依赖的是 Android SDK API，而不是直接调用 C++ 内部细节。
+
+区别在于本项目当前目标是“**帧动画渲染 SDK**”，而不是完整游戏引擎：
+
+- API 面更小：聚焦 `load/play/pause/seek/release`。
+- 资源协议更垂直：围绕 `clip/timeline/material`。
+- 生命周期更强调与 App UI（Activity/Fragment/View）协作。
+
+### 11.2 本地 C++ 库是不是动态库？
+
+在 Android SDK 集成场景下，通常是：
+
+- C++ RuntimeCore 编译为 `lib*.so`（ABI 维度：arm64-v8a、armeabi-v7a 等）。
+- `petcat-sdk` AAR 打包对应 ABI 的 `.so`。
+- App 集成 AAR 后，系统在运行时加载 `.so`，Kotlin/Java 通过 JNI 调用。
+
+因此你可以把关系理解为：
+
+`业务 App -> SDK(AAR) -> JNI -> C++ RuntimeCore(.so) -> OpenGL ES/GPU`
+
+### 11.3 Kotlin 和 Java 在 JNI 使用上的区别是什么？
+
+对 JNI 而言，**本质几乎没有差别**：
+
+- Kotlin 最终也编译为 JVM 字节码。
+- JNI 绑定仍然是 `external`（Kotlin）/`native`（Java）方法 + `JNIEXPORT` C 接口。
+
+主要差别在“开发体验与 API 设计”：
+
+- Kotlin：空安全、数据类、默认参数、协程/DSL 更适合 SDK 外观层。
+- Java：语法更传统，调用链更显式。
+
+结论：JNI 边界、性能模型、动态库加载机制并不会因为 Kotlin 而发生架构级变化。
+
+### 11.4 SDK / Runtime / Engine / SO 的层级关系（建议固定术语）
+
+- **SDK（AAR）**：业务唯一依赖入口，暴露 `PetCatPlayerView/PetCatPlayer` 等 API。
+- **Runtime（Kotlin 内部层）**：调度、状态机、资源编排、JNI bridge。
+- **Engine Core（C++ RuntimeCore）**：渲染、纹理缓存、Timeline 执行、性能统计。
+- **SO（产物形态）**：Engine Core 的二进制交付形式之一（`libpetcat_runtime.so`）。
+
+也就是说：**SO 是 Engine 的打包产物，Engine 是 Runtime 的 Native 实现，Runtime 是 SDK 的内部实现**。
